@@ -7,9 +7,12 @@ from dotenv import load_dotenv
 
 from app.extractor.base import to_records
 from app.extractor.alphavantage import AlphaVantage
-
+from app.extractor.marketstack import MarketStack
+from app.extractor.twelvedata import TwelveData
 load_dotenv()
-PROVIDERS = {"alphavantage": AlphaVantage}
+PROVIDERS = {"alphavantage": AlphaVantage,
+            "marketstack" : MarketStack,
+            "twelvedata" : TwelveData}
 
 def parse_date(s: Optional[str]) -> Optional[date]:
     if not s:
