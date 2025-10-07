@@ -9,10 +9,14 @@ from app.extractor.base import to_records
 from app.extractor.alphavantage import AlphaVantage
 from app.extractor.marketstack import MarketStack
 from app.extractor.twelvedata import TwelveData
+
 load_dotenv()
-PROVIDERS = {"alphavantage": AlphaVantage,
-            "marketstack" : MarketStack,
-            "twelvedata" : TwelveData}
+
+PROVIDERS = {
+    "alphavantage": AlphaVantage,
+    "marketstack": MarketStack,
+    "twelvedata": TwelveData,
+}
 
 def parse_date(s: Optional[str]) -> Optional[date]:
     if not s:
@@ -33,7 +37,7 @@ def save_csv(path: Path, rows):
     print(f"Guardado: {path}")
 
 def run_cli():
-    p = argparse.ArgumentParser(description="Extractor de datos financieros")
+    p = argparse.ArgumentParser(description="Extractor de datos financieros (multi-API).")
     p.add_argument("action", choices=["fetch"])
     p.add_argument("--provider", choices=list(PROVIDERS.keys()), default="alphavantage")
     p.add_argument("--symbol", required=True)
@@ -60,4 +64,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
