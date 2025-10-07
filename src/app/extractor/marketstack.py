@@ -4,7 +4,8 @@ from datetime import date
 from typing import Iterable
 from .base import DataProvider, Candle
 
-API_URL = "https://api.marketstack.com/v1/eod"
+# En plan free, usa HTTP
+API_URL = "http://api.marketstack.com/v1/eod"
 
 class MarketStack(DataProvider):
     name = "marketstack"
@@ -42,12 +43,21 @@ class MarketStack(DataProvider):
             r.raise_for_status()
             payload = r.json()
 
-            data = payload.get("data", [])
+            # 👇 Mostrar errores reales de la API (antes los tragábamos)
+            if isinstance(payload, dict) and "error" in payload:
+                msg = payload["error"].get("message") or payload["error"]
+                raise RuntimeError(f"Marketstack error: {msg}")
+
+            data = payload.get("data")
+            if data is None:
+                # Respuesta rara: cuéntala para depurar
+                raise RuntimeError(f"Marketstack: respuesta inesperada {payload}")
+
             if not data:
                 break
 
             for row in data:
-                ds = str(row["date"])[:10]  # "2024-01-02T00:00:00+0000" -> "2024-01-02"
+                ds = str(row["date"])[:10]  # "YYYY-MM-DD"
                 yield Candle(
                     date=ds,
                     open=float(row.get("open") or 0.0),
