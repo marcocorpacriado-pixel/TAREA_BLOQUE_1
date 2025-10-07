@@ -29,3 +29,4 @@ class DataProvider:
 def to_records(candles: Iterable[Candle]) -> List[Dict[str, Any]]:
     return [c.__dict__ for c in candles]
 
+
