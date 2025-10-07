@@ -5,11 +5,10 @@ from datetime import date
 from typing import Optional
 from dotenv import load_dotenv
 
-from .extractor.base import to_records
-from .extractor.alphavantage import AlphaVantage
+from app.extractor.base import to_records
+from app.extractor.alphavantage import AlphaVantage
 
-load_dotenv()  # lee .env si existe
-
+load_dotenv()
 PROVIDERS = {"alphavantage": AlphaVantage}
 
 def parse_date(s: Optional[str]) -> Optional[date]:
@@ -31,10 +30,10 @@ def save_csv(path: Path, rows):
     print(f"Guardado: {path}")
 
 def run_cli():
-    p = argparse.ArgumentParser(description="Extractor de datos financieros (Alpha Vantage).")
+    p = argparse.ArgumentParser(description="Extractor de datos financieros")
     p.add_argument("action", choices=["fetch"])
     p.add_argument("--provider", choices=list(PROVIDERS.keys()), default="alphavantage")
-    p.add_argument("--symbol", required=True, help="Símbolo (acción o índice/ETF)")
+    p.add_argument("--symbol", required=True)
     p.add_argument("--start", help="YYYY-MM-DD")
     p.add_argument("--end", help="YYYY-MM-DD")
     p.add_argument("--interval", choices=["daily"], default="daily")
@@ -58,3 +57,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
