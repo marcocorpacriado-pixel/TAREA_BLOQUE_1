@@ -14,7 +14,6 @@ def _parse_date(d: str) -> datetime:
     return datetime.strptime(d, "%Y-%m-%d")
 
 def _sorted_unique_candles(candles: Iterable[Candle]) -> List[Candle]:
-    # Ordena por fecha y elimina duplicados (último gana)
     by_date: Dict[str, Candle] = {}
     for c in candles:
         ds = str(c.date)[:10]
@@ -29,13 +28,11 @@ def _sorted_unique_candles(candles: Iterable[Candle]) -> List[Candle]:
     return [by_date[ds] for ds in sorted(by_date.keys(), key=_parse_date)]
 
 def _ffill_closes(candles: List[Candle]) -> List[Candle]:
-    # Rellena cierres perdidos por forward-fill (si falta close y hay previo)
     prev_close: Optional[float] = None
     out: List[Candle] = []
     for c in candles:
         close = c.close if c.close is not None else prev_close
         if close is None:
-            # no hay nada que forward-fillear aún → dejamos tal cual
             out.append(c)
         else:
             out.append(Candle(c.date, c.open, c.high, c.low, close, c.volume))
@@ -44,7 +41,6 @@ def _ffill_closes(candles: List[Candle]) -> List[Candle]:
     return out
 
 def _drop_na_head(candles: List[Candle]) -> List[Candle]:
-    # Quita inicio hasta primer close no-NaN
     out: List[Candle] = []
     seen_valid = False
     for c in candles:
@@ -76,14 +72,11 @@ class PriceSeries:
     use_log_returns: bool = True  # ✅ retornos log por defecto
 
     def __post_init__(self):
-        # 1) ordenar + deduplicar por fecha
         self.candles = _sorted_unique_candles(self.candles)
-        # 2) limpieza: forward-fill opcional y drop leading NaN
         if self.forward_fill:
             self.candles = _ffill_closes(self.candles)
         self.candles = _drop_na_head(self.candles)
         self.n_obs = len(self.candles)
-        # 3) stats automáticas
         self._recompute_stats()
 
     # --------------------------
@@ -96,11 +89,6 @@ class PriceSeries:
         return [c.date for c in self.candles]
 
     def returns(self) -> List[float]:
-        """
-        Retornos diarios:
-          - si use_log_returns=True: r_t = ln(P_t / P_{t-1})
-          - si False: r_t = P_t / P_{t-1} - 1
-        """
         cls = self.closes()
         if len(cls) < 2:
             return []
@@ -120,7 +108,7 @@ class PriceSeries:
     def returns_with_dates(self) -> List[Tuple[str, float]]:
         ds = self.dates()
         rs = self.returns()
-        return list(zip(ds[1:], rs))  # alineado: returns empiezan en la 2ª fecha
+        return list(zip(ds[1:], rs))
 
     # --------------------------
     # Stats auto
@@ -147,7 +135,7 @@ class PriceSeries:
     # --------------------------
     def add_candle(self, c: Candle):
         self.candles.append(c)
-        self.__post_init__()  # re-limpia y recalcula
+        self.__post_init__()
 
     def to_records(self) -> List[Dict]:
         rows: List[Dict] = []
@@ -182,6 +170,5 @@ class PriceSeries:
             import pandas as pd
         except Exception:
             raise RuntimeError("pandas no está instalado (requerido para to_dataframe).")
-        import pandas as pd
         df = pd.DataFrame(self.to_records()).sort_values("date").reset_index(drop=True)
         return df
