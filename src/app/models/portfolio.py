@@ -1,4 +1,3 @@
-# --- Sobrescribe portfolio.py con versión correcta y limpia ---
 path = "/content/TAREA_BLOQUE_1/src/app/models/portfolio.py"
 code = r'''
 from __future__ import annotations
@@ -16,12 +15,11 @@ from app.analytics.simulate import simulate_portfolio_paths, summarize_paths
 
 @dataclass
 class Portfolio:
-    series: Dict[str, PriceSeries]                # {ticker: PriceSeries}
-    weights: Dict[str, float]                     # {ticker: peso}
+    series: Dict[str, PriceSeries]
+    weights: Dict[str, float]
     initial_value: float = 1.0
     name: str = "MyPortfolio"
 
-    # Resultados de simulación (opcionales)
     sim_paths: Optional[np.ndarray] = field(init=False, default=None)
     sim_summary: Optional[Dict[str, np.ndarray]] = field(init=False, default=None)
 
@@ -32,16 +30,14 @@ class Portfolio:
         if abs(ssum - 1.0) > 1e-9:
             self.weights = {k: v/ssum for k, v in self.weights.items()}
 
-    # ---------- Métricas históricas ----------
     def _historical_portfolio_returns(self) -> List[Tuple[str, float]]:
-        aligned = align_series_returns(self.series)  # [(fecha, {sym:r,...}), ...]
+        aligned = align_series_returns(self.series)
         return portfolio_return_series(self.weights, aligned)
 
     def historical_metrics(self, rf: float = 0.0, freq: int = 252, alpha: float = 0.95) -> Dict[str, Optional[float]]:
         rets = [x for _, x in self._historical_portfolio_returns()]
         return metrics_for_portfolio(rets, rf=rf, freq=freq, alpha=alpha)
 
-    # ---------- Monte Carlo integrado ----------
     def montecarlo_simulate(self,
                             days: int = 252,
                             n_paths: int = 1000,
@@ -58,75 +54,33 @@ class Portfolio:
         self.sim_summary = summarize_paths(self.sim_paths, q=q)
         return self
 
-    # ---------- Reporte en Markdown ----------
     def report(self,
                title: Optional[str] = None,
                rf: float = 0.0,
                freq: int = 252,
                alpha: float = 0.95,
                include_simulation: bool = True) -> str:
-        """
-        Devuelve Markdown con composición, calidad de datos, métricas históricas
-        y (opcional) resumen de simulación.
-        """
         title = title or f"Informe de Cartera — {self.name}"
         lines: List[str] = [f"# {title}", ""]
-
-        # Composición
         lines.append("## Composición")
         for k, v in self.weights.items():
             lines.append(f"- **{k}**: {v:.2%}")
         lines.append("")
-
-        # Calidad de series
-        lines.append("## Calidad de datos (series)")
-        any_warn = False
-        for sym, ps in self.series.items():
-            start, end = ps.span_dates()
-            span = f"{start} → {end}" if start and end else "N/A"
-            warns = ps.validate()
-            lines.append(f"- **{sym}** · span: {span} · n={ps.n_obs}")
-            if warns:
-                any_warn = True
-                for w in warns:
-                    lines.append(f"  - ⚠️ {w}")
-        if not any_warn:
-            lines.append("- ✅ Sin incidencias relevantes en limpieza.")
-        lines.append("")
-
-        # Métricas históricas de cartera
         lines.append("## Métricas históricas de la cartera")
         hist = self.historical_metrics(rf=rf, freq=freq, alpha=alpha)
-        lines.append(f"- Retorno medio (por periodo): **{(hist['ret_mean'] or 0)*100:.3f}%**")
-        lines.append(f"- Volatilidad (por periodo): **{(hist['ret_std'] or 0)*100:.3f}%**")
-        lines.append(f"- Sharpe (anualizado): **{hist['sharpe'] if hist['sharpe'] is not None else 'N/A'}**")
-        lines.append(f"- VaR {int(alpha*100)}% (histórico): **{hist['var'] if hist['var'] is not None else 'N/A'}**")
-        lines.append(f"- CVaR {int(alpha*100)}% (histórico): **{hist['cvar'] if hist['cvar'] is not None else 'N/A'}**")
-        lines.append(f"- Observaciones: **{hist['n_obs']}**")
+        lines.append(f"- Retorno medio: {(hist['ret_mean'] or 0)*100:.3f}%")
+        lines.append(f"- Volatilidad: {(hist['ret_std'] or 0)*100:.3f}%")
+        lines.append(f"- Sharpe: {hist['sharpe'] if hist['sharpe'] else 'N/A'}")
         lines.append("")
-
-        # Simulación (si existe)
         if include_simulation and self.sim_summary is not None:
-            lines.append("## Simulación Monte Carlo (resumen)")
+            lines.append("## Simulación Monte Carlo")
             mean_end = float(self.sim_summary["mean"][-1])
             p5_end   = float(self.sim_summary["p_low"][-1])
             p95_end  = float(self.sim_summary["p_high"][-1])
-            lines.append(f"- Valor final esperado: **{mean_end:.4f}** (V0={self.initial_value})")
-            lines.append(f"- Banda 5–95% al final: **[{p5_end:.4f}, {p95_end:.4f}]**")
-            lines.append("")
-
-        # Notas
-        lines.append("## Notas y advertencias")
-        if hist["n_obs"] < 30:
-            lines.append("- ⚠️ Pocas observaciones históricas (<30); las métricas pueden ser inestables.")
-        if any(ps.ret_std == 0.0 for ps in self.series.values() if ps.ret_std is not None):
-            lines.append("- ⚠️ Alguna serie parece casi constante; revisar datos.")
-        if not include_simulation:
-            lines.append("- ℹ️ Simulación no incluida. Ejecuta `montecarlo_simulate()` para agregarla.")
-
+            lines.append(f"- Valor final esperado: {mean_end:.4f}")
+            lines.append(f"- Banda 5–95%: [{p5_end:.4f}, {p95_end:.4f}]")
         return "\n".join(lines)
 
-    # ---------- Visualizaciones ----------
     def plots_report(self,
                      which: list[str] = ("components", "hist", "sim"),
                      normalize: bool = True,
@@ -135,20 +89,10 @@ class Portfolio:
                      figsize: tuple[float, float] = (12, 6),
                      dpi: int = 160,
                      save_dir: str | None = None):
-        """
-        Genera gráficos útiles. Controla qué mostrar y el tamaño/calidad:
-          - which: tupla/lista con "components" (cierres por activo), "hist" (histograma retornos cartera),
-                   "sim" (bandas y trayectorias de la simulación)
-          - normalize: normaliza precios por el valor inicial al comparar activos
-          - show_paths: si True, dibuja hasta max_paths trayectorias de la simulación
-          - figsize, dpi: tamaño/calidad de cada figura (evita que se “corten” en Colab)
-          - save_dir: si se indica, guarda cada gráfico en PNG además de mostrarlo
-        """
         import os
-
         os.makedirs(save_dir, exist_ok=True) if save_dir else None
 
-        # 1) Cierres por componente
+        # 1) Componentes
         if "components" in which:
             plt.figure(figsize=figsize, dpi=dpi)
             for sym, ps in self.series.items():
@@ -156,53 +100,29 @@ class Portfolio:
                 if cls.size == 0:
                     continue
                 y = cls/cls[0] if normalize else cls
-                x = np.arange(len(y))
-                plt.plot(x, y, label=sym)
+                plt.plot(y, label=sym)
             plt.title(f"Cierres {'normalizados' if normalize else ''} — {self.name}")
-            plt.xlabel("Tiempo (índice)")
-            plt.ylabel("Precio" + (" normalizado" if normalize else ""))
             plt.grid(alpha=0.3)
             plt.legend()
-            plt.tight_layout()
             if save_dir:
                 plt.savefig(os.path.join(save_dir, "components.png"), bbox_inches="tight")
             plt.show()
 
-        # 2) Histograma retornos cartera (histórico)
-        if "hist" in which:
-            rets = [r for _, r in self._historical_portfolio_returns()]
-            if rets:
-                plt.figure(figsize=figsize, dpi=dpi)
-                plt.hist(rets, bins=40, alpha=0.85)
-                plt.title(f"Histograma de retornos (histórico) — {self.name}")
-                plt.xlabel("Retorno")
-                plt.ylabel("Frecuencia")
-                plt.grid(alpha=0.3)
-                plt.tight_layout()
-                if save_dir:
-                    plt.savefig(os.path.join(save_dir, "hist_returns.png"), bbox_inches="tight")
-                plt.show()
-
-        # 3) Simulación (si existe)
-        if "sim" in which and self.sim_summary is not None and self.sim_paths is not None:
+        # 2) Simulación
+        if "sim" in which and self.sim_summary is not None:
             mean = self.sim_summary["mean"]
             p_low = self.sim_summary["p_low"]
             p_high = self.sim_summary["p_high"]
             t = np.arange(len(mean))
-
             plt.figure(figsize=figsize, dpi=dpi)
             plt.fill_between(t, p_low, p_high, alpha=0.2, label="5%-95%")
             plt.plot(t, mean, lw=2, label="Media")
-            if show_paths:
-                n_draw = min(max_paths, self.sim_paths.shape[0])
-                for i in range(n_draw):
-                    plt.plot(t, self.sim_paths[i, :], alpha=0.35, lw=0.8)
+            if show_paths and self.sim_paths is not None:
+                for i in range(min(max_paths, self.sim_paths.shape[0])):
+                    plt.plot(t, self.sim_paths[i, :], alpha=0.3, lw=0.7)
             plt.title(f"Simulación Monte Carlo — {self.name}")
-            plt.xlabel("Días")
-            plt.ylabel("Valor cartera")
             plt.grid(alpha=0.3)
             plt.legend()
-            plt.tight_layout()
             if save_dir:
                 plt.savefig(os.path.join(save_dir, "simulation.png"), bbox_inches="tight")
             plt.show()
@@ -210,9 +130,8 @@ class Portfolio:
 with open(path, "w", encoding="utf-8") as f:
     f.write(code)
 
-# Recarga y verifica
 import importlib, app.models.portfolio as pf_mod
 importlib.reload(pf_mod)
+print("✅ portfolio.py actualizado y recargado correctamente")
 from app.models.portfolio import Portfolio
-print("✅ portfolio.py sobrescrito y recargado")
-print("report:", hasattr(Portfolio, "report"), "| plots_report:", hasattr(Portfolio, "plots_report"))
+print("Métodos disponibles:", [m for m in dir(Portfolio) if not m.startswith('_')])
