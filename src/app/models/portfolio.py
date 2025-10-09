@@ -1,3 +1,6 @@
+# --- Sobrescribe portfolio.py con versión correcta y limpia ---
+path = "/content/TAREA_BLOQUE_1/src/app/models/portfolio.py"
+code = r'''
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, Optional, List, Tuple
@@ -124,7 +127,7 @@ class Portfolio:
         return "\n".join(lines)
 
     # ---------- Visualizaciones ----------
-        def plots_report(self,
+    def plots_report(self,
                      which: list[str] = ("components", "hist", "sim"),
                      normalize: bool = True,
                      show_paths: bool = True,
@@ -141,7 +144,8 @@ class Portfolio:
           - figsize, dpi: tamaño/calidad de cada figura (evita que se “corten” en Colab)
           - save_dir: si se indica, guarda cada gráfico en PNG además de mostrarlo
         """
-        import numpy as np, os
+        import os
+
         os.makedirs(save_dir, exist_ok=True) if save_dir else None
 
         # 1) Cierres por componente
@@ -202,3 +206,13 @@ class Portfolio:
             if save_dir:
                 plt.savefig(os.path.join(save_dir, "simulation.png"), bbox_inches="tight")
             plt.show()
+'''
+with open(path, "w", encoding="utf-8") as f:
+    f.write(code)
+
+# Recarga y verifica
+import importlib, app.models.portfolio as pf_mod
+importlib.reload(pf_mod)
+from app.models.portfolio import Portfolio
+print("✅ portfolio.py sobrescrito y recargado")
+print("report:", hasattr(Portfolio, "report"), "| plots_report:", hasattr(Portfolio, "plots_report"))
