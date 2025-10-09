@@ -124,52 +124,71 @@ class Portfolio:
         return "\n".join(lines)
 
     # ---------- Visualizaciones ----------
-    def plots_report(self,
+        def plots_report(self,
+                     which: list[str] = ("components", "hist", "sim"),
                      normalize: bool = True,
                      show_paths: bool = True,
-                     max_paths: int = 10):
+                     max_paths: int = 10,
+                     figsize: tuple[float, float] = (12, 6),
+                     dpi: int = 160,
+                     save_dir: str | None = None):
         """
-        1) Cierres normalizados por activo
-        2) Histograma de retornos de cartera (histórico)
-        3) Si hay simulación: banda [p5,p95], media y hasta N trayectorias
+        Genera gráficos útiles. Controla qué mostrar y el tamaño/calidad:
+          - which: tupla/lista con "components" (cierres por activo), "hist" (histograma retornos cartera),
+                   "sim" (bandas y trayectorias de la simulación)
+          - normalize: normaliza precios por el valor inicial al comparar activos
+          - show_paths: si True, dibuja hasta max_paths trayectorias de la simulación
+          - figsize, dpi: tamaño/calidad de cada figura (evita que se “corten” en Colab)
+          - save_dir: si se indica, guarda cada gráfico en PNG además de mostrarlo
         """
-        # 1) Cierres normalizados
-        import numpy as np
-        plt.figure(figsize=(9,4))
-        for sym, ps in self.series.items():
-            cls = np.array(ps.closes(), dtype=float)
-            if cls.size == 0:
-                continue
-            y = cls/cls[0] if normalize else cls
-            x = np.arange(len(y))
-            plt.plot(x, y, label=sym)
-        plt.title(f"Cierres {'normalizados' if normalize else ''} — {self.name}")
-        plt.xlabel("Tiempo (índice)")
-        plt.ylabel("Precio" + (" normalizado" if normalize else ""))
-        plt.grid(alpha=0.3)
-        plt.legend()
-        plt.show()
+        import numpy as np, os
+        os.makedirs(save_dir, exist_ok=True) if save_dir else None
 
-        # 2) Histograma de retornos de cartera (histórico)
-        rets = [r for _, r in self._historical_portfolio_returns()]
-        if rets:
-            plt.figure(figsize=(7,4))
-            plt.hist(rets, bins=40, alpha=0.8)
-            plt.title(f"Histograma de retornos (histórico) — {self.name}")
-            plt.xlabel("Retorno")
-            plt.ylabel("Frecuencia")
+        # 1) Cierres por componente
+        if "components" in which:
+            plt.figure(figsize=figsize, dpi=dpi)
+            for sym, ps in self.series.items():
+                cls = np.array(ps.closes(), dtype=float)
+                if cls.size == 0:
+                    continue
+                y = cls/cls[0] if normalize else cls
+                x = np.arange(len(y))
+                plt.plot(x, y, label=sym)
+            plt.title(f"Cierres {'normalizados' if normalize else ''} — {self.name}")
+            plt.xlabel("Tiempo (índice)")
+            plt.ylabel("Precio" + (" normalizado" if normalize else ""))
             plt.grid(alpha=0.3)
+            plt.legend()
+            plt.tight_layout()
+            if save_dir:
+                plt.savefig(os.path.join(save_dir, "components.png"), bbox_inches="tight")
             plt.show()
 
+        # 2) Histograma retornos cartera (histórico)
+        if "hist" in which:
+            rets = [r for _, r in self._historical_portfolio_returns()]
+            if rets:
+                plt.figure(figsize=figsize, dpi=dpi)
+                plt.hist(rets, bins=40, alpha=0.85)
+                plt.title(f"Histograma de retornos (histórico) — {self.name}")
+                plt.xlabel("Retorno")
+                plt.ylabel("Frecuencia")
+                plt.grid(alpha=0.3)
+                plt.tight_layout()
+                if save_dir:
+                    plt.savefig(os.path.join(save_dir, "hist_returns.png"), bbox_inches="tight")
+                plt.show()
+
         # 3) Simulación (si existe)
-        if self.sim_summary is not None and self.sim_paths is not None:
+        if "sim" in which and self.sim_summary is not None and self.sim_paths is not None:
             mean = self.sim_summary["mean"]
             p_low = self.sim_summary["p_low"]
             p_high = self.sim_summary["p_high"]
             t = np.arange(len(mean))
-            plt.figure(figsize=(9,5))
+
+            plt.figure(figsize=figsize, dpi=dpi)
             plt.fill_between(t, p_low, p_high, alpha=0.2, label="5%-95%")
-            plt.plot(t, mean, color="black", lw=2, label="Media")
+            plt.plot(t, mean, lw=2, label="Media")
             if show_paths:
                 n_draw = min(max_paths, self.sim_paths.shape[0])
                 for i in range(n_draw):
@@ -179,4 +198,7 @@ class Portfolio:
             plt.ylabel("Valor cartera")
             plt.grid(alpha=0.3)
             plt.legend()
+            plt.tight_layout()
+            if save_dir:
+                plt.savefig(os.path.join(save_dir, "simulation.png"), bbox_inches="tight")
             plt.show()
