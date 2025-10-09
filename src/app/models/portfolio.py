@@ -3,7 +3,6 @@ from dataclasses import dataclass, field
 from typing import Dict, Optional, List, Tuple
 import numpy as np
 import matplotlib.pyplot as plt
-import io
 
 from app.models.series import PriceSeries
 from app.analytics.metrics import (
@@ -30,7 +29,7 @@ class Portfolio:
         if abs(ssum - 1.0) > 1e-9:
             self.weights = {k: v/ssum for k, v in self.weights.items()}
 
-    # ---------- Métricas históricas sobre retornos alineados ----------
+    # ---------- Métricas históricas ----------
     def _historical_portfolio_returns(self) -> List[Tuple[str, float]]:
         aligned = align_series_returns(self.series)  # [(fecha, {sym:r,...}), ...]
         return portfolio_return_series(self.weights, aligned)
@@ -64,28 +63,25 @@ class Portfolio:
                alpha: float = 0.95,
                include_simulation: bool = True) -> str:
         """
-        Devuelve Markdown con:
-          - pesos, componentes, span, n_obs
-          - métricas históricas (Sharpe, VaR, CVaR, media, vol)
-          - advertencias de calidad de datos
-          - (opcional) métricas de simulación si existen
+        Devuelve Markdown con composición, calidad de datos, métricas históricas
+        y (opcional) resumen de simulación.
         """
         title = title or f"Informe de Cartera — {self.name}"
         lines: List[str] = [f"# {title}", ""]
 
-        # Pesos
+        # Composición
         lines.append("## Composición")
         for k, v in self.weights.items():
             lines.append(f"- **{k}**: {v:.2%}")
         lines.append("")
 
-        # Calidad de las series
+        # Calidad de series
         lines.append("## Calidad de datos (series)")
         any_warn = False
         for sym, ps in self.series.items():
             start, end = ps.span_dates()
-            warns = ps.validate()
             span = f"{start} → {end}" if start and end else "N/A"
+            warns = ps.validate()
             lines.append(f"- **{sym}** · span: {span} · n={ps.n_obs}")
             if warns:
                 any_warn = True
@@ -95,7 +91,7 @@ class Portfolio:
             lines.append("- ✅ Sin incidencias relevantes en limpieza.")
         lines.append("")
 
-        # Métricas históricas de la cartera
+        # Métricas históricas de cartera
         lines.append("## Métricas históricas de la cartera")
         hist = self.historical_metrics(rf=rf, freq=freq, alpha=alpha)
         lines.append(f"- Retorno medio (por periodo): **{(hist['ret_mean'] or 0)*100:.3f}%**")
@@ -106,41 +102,39 @@ class Portfolio:
         lines.append(f"- Observaciones: **{hist['n_obs']}**")
         lines.append("")
 
-        # Simulación si existe
+        # Simulación (si existe)
         if include_simulation and self.sim_summary is not None:
             lines.append("## Simulación Monte Carlo (resumen)")
             mean_end = float(self.sim_summary["mean"][-1])
             p5_end   = float(self.sim_summary["p_low"][-1])
             p95_end  = float(self.sim_summary["p_high"][-1])
             lines.append(f"- Valor final esperado: **{mean_end:.4f}** (V0={self.initial_value})")
-            lines.append(f"- Banda {5}–{95}% al final: **[{p5_end:.4f}, {p95_end:.4f}]**")
+            lines.append(f"- Banda 5–95% al final: **[{p5_end:.4f}, {p95_end:.4f}]**")
             lines.append("")
 
-        # Advertencias generales
+        # Notas
         lines.append("## Notas y advertencias")
         if hist["n_obs"] < 30:
             lines.append("- ⚠️ Pocas observaciones históricas (<30); las métricas pueden ser inestables.")
         if any(ps.ret_std == 0.0 for ps in self.series.values() if ps.ret_std is not None):
-            lines.append("- ⚠️ Alguna serie parece prácticamente constante; revise los datos.")
+            lines.append("- ⚠️ Alguna serie parece casi constante; revisar datos.")
         if not include_simulation:
-            lines.append("- ℹ️ Simulación no incluida en este informe. Ejecuta `montecarlo_simulate()` para agregarla.")
+            lines.append("- ℹ️ Simulación no incluida. Ejecuta `montecarlo_simulate()` para agregarla.")
 
         return "\n".join(lines)
 
-    # ---------- Visualizaciones útiles ----------
+    # ---------- Visualizaciones ----------
     def plots_report(self,
                      normalize: bool = True,
                      show_paths: bool = True,
                      max_paths: int = 10):
         """
-        Muestra:
-          1) Cierres normalizados por componente (comparativa)
-          2) Histograma de retornos de cartera (histórico)
-          3) Si hay simulación: banda [p5,p95], media y hasta N trayectorias
+        1) Cierres normalizados por activo
+        2) Histograma de retornos de cartera (histórico)
+        3) Si hay simulación: banda [p5,p95], media y hasta N trayectorias
         """
-        import pandas as pd
-
-        # 1) Cierres normalizados (si procede)
+        # 1) Cierres normalizados
+        import numpy as np
         plt.figure(figsize=(9,4))
         for sym, ps in self.series.items():
             cls = np.array(ps.closes(), dtype=float)
